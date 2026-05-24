@@ -1,0 +1,23 @@
+```bash
+# Shell script and temporary files
+*.sh.swp
+*.txt.swp
+*.tmp
+
+# Log files
+*.log
+
+# Environment files
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Backup files
+*~
+*.bak
+*.backup
+```
