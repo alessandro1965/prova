@@ -1,0 +1,1 @@
+Nothing needs to be added to .gitignore since only a text file (`paperino.txt`) was added, which appears to be a regular source/config file rather than a build artifact, dependency, or temporary file.
