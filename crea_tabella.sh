@@ -1,61 +1,86 @@
 #!/bin/bash
 
-# Script per creare una tabella con il contenuto di una cartella
-# Utilizzo: ./crea_tabella.sh <percorso_cartella>
-
-# Controllo se è stato passato un argomento
+# Controlla se è stato fornito un argomento, altrimenti usa la cartella corrente
 if [ $# -eq 0 ]; then
-    echo "Errore: Nessuna cartella specificata."
-    echo "Utilizzo: $0 <percorso_cartella>"
+    directory="."
+else
+    directory="$1"
+fi
+
+output_file="tabella.txt"
+
+# Controlla se la directory esiste
+if [ ! -d "$directory" ]; then
+    echo "Errore: La directory '$directory' non esiste."
     exit 1
 fi
 
-CARTELLA="$1"
-
-# Controllo se la cartella esiste
-if [ ! -d "$CARTELLA" ]; then
-    echo "Errore: La cartella '$CARTELLA' non esiste."
-    exit 1
+# Rilevamento del sistema operativo per il comando stat
+if stat --version &>/dev/null; then
+    # Linux
+    GET_SIZE="stat -c %s"
+    GET_DATE="stat -c %w" 
+    SYSTEM="LINUX"
+else
+    # macOS / BSD
+    GET_SIZE="stat -f %z"
+    GET_DATE="stat -f %SB"
+    SYSTEM="MAC"
 fi
 
-FILE_OUTPUT="tabella.txt"
-
-# Creo l'intestazione della tabella
-echo "+----------------------+------------+---------+" > "$FILE_OUTPUT"
-echo "| Nome                 | Tipo       | Dimensione|" >> "$FILE_OUTPUT"
-echo "+----------------------+------------+---------+" >> "$FILE_OUTPUT"
-
-# Itero sui file nella cartella
-for entry in "$CARTELLA"/*; do
-    # Controllo se esistono file nella cartella
-    if [ ! -e "$entry" ]; then
-        continue
-    fi
-    
-    # Ottengo il nome del file
-    nome=$(basename "$entry")
-    
-    # Determino il tipo (directory o file)
-    if [ -d "$entry" ]; then
-        tipo="DIR"
-        dimensione="-"
+# Funzione per formattare la data
+format_date() {
+    local raw_date="$1"
+    if [ "$raw_date" == "-" ] || [ -z "$raw_date" ]; then
+        echo "N/D"
     else
+        echo "${raw_date:0:19}"
+    fi
+}
+
+# Scrive l'intestazione della tabella
+{
+    printf "+%-22s+%-8s+%-12s+%-20s+\n" "$(printf '=%.0s' {1..22})" "$(printf '=%.0s' {1..8})" "$(printf '=%.0s' {1..12})" "$(printf '=%.0s' {1..20})"
+    printf "| %-20s | %-6s | %10s | %-18s |\n" "Nome" "Tipo" "Dimensione" "Data Creazione"
+    printf "+%-22s+%-8s+%-12s+%-20s+\n" "$(printf '=%.0s' {1..22})" "$(printf '=%.0s' {1..8})" "$(printf '=%.0s' {1..12})" "$(printf '=%.0s' {1..20})"
+} > "$output_file"
+
+# Ciclo attraverso i file
+shopt -s nullglob
+for item in "$directory"/*; do
+    name=$(basename "$item")
+    
+    if [ ${#name} -gt 20 ]; then
+        display_name="${name:0:17}..."
+    else
+        display_name="$name"
+    fi
+    
+    if [ -d "$item" ]; then
+        tipo="DIR"
+        size="-"
+        date_created="-"
+    elif [ -f "$item" ]; then
         tipo="FILE"
-        # Ottengo la dimensione in byte
-        dimensione=$(stat -c%s "$entry" 2>/dev/null || stat -f%z "$entry" 2>/dev/null)
+        size=$($GET_SIZE "$item" 2>/dev/null)
+        raw_date=$($GET_DATE "$item" 2>/dev/null)
+        
+        if [ "$SYSTEM" == "LINUX" ] && ([ "$raw_date" == "-" ] || [ -z "$raw_date" ]); then
+            raw_date=$(stat -c %y "$item" 2>/dev/null)
+        fi
+        
+        date_created=$(format_date "$raw_date")
+        
+        if [ -z "$size" ]; then size="?"; fi
+    else
+        tipo="ALTRO"
+        size="?"
+        date_created="?"
     fi
     
-    # Tronco il nome se troppo lungo (max 22 caratteri per allineamento)
-    if [ ${#nome} -gt 22 ]; then
-        nome="${nome:0:19}..."
-    fi
-    
-    # Formato la riga della tabella
-    printf "| %-20s | %-10s | %7s |\n" "$nome" "$tipo" "$dimensione" >> "$FILE_OUTPUT"
+    printf "| %-20s | %-6s | %10s | %-18s |\n" "$display_name" "$tipo" "$size" "$date_created" >> "$output_file"
 done
 
-# Chiudo la tabella
-echo "+----------------------+------------+---------+" >> "$FILE_OUTPUT"
+printf "+%-22s+%-8s+%-12s+%-20s+\n" "$(printf '=%.0s' {1..22})" "$(printf '=%.0s' {1..8})" "$(printf '=%.0s' {1..12})" "$(printf '=%.0s' {1..20})" >> "$output_file"
 
-echo "Tabella creata con successo nel file '$FILE_OUTPUT'"
-echo "Contenuto della cartella: $CARTELLA"
+echo "Tabella creata con successo in '$output_file'"
